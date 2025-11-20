@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 )
 
-// StartCategorizationScheduler starts a ticker to periodically categorize playlists
+
 func StartCategorizationScheduler(pool *worker.WorkerPool) {
 	// Run once immediately
 	go func() {
