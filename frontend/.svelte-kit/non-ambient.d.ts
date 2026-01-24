@@ -27,20 +27,25 @@ export {};
 
 declare module "$app/types" {
 	export interface AppTypes {
-		RouteId(): "/" | "/dashboard" | "/login" | "/playlist" | "/playlist/[id]" | "/public" | "/signup";
+		RouteId(): "/" | "/category" | "/category/[name]" | "/dashboard" | "/library" | "/login" | "/playlist" | "/playlist/[id]" | "/public" | "/settings" | "/signup";
 		RouteParams(): {
+			"/category/[name]": { name: string };
 			"/playlist/[id]": { id: string }
 		};
 		LayoutParams(): {
-			"/": { id?: string };
+			"/": { name?: string; id?: string };
+			"/category": { name?: string };
+			"/category/[name]": { name: string };
 			"/dashboard": Record<string, never>;
+			"/library": Record<string, never>;
 			"/login": Record<string, never>;
 			"/playlist": { id?: string };
 			"/playlist/[id]": { id: string };
 			"/public": Record<string, never>;
+			"/settings": Record<string, never>;
 			"/signup": Record<string, never>
 		};
-		Pathname(): "/" | "/dashboard" | "/dashboard/" | "/login" | "/login/" | "/playlist" | "/playlist/" | `/playlist/${string}` & {} | `/playlist/${string}/` & {} | "/public" | "/public/" | "/signup" | "/signup/";
+		Pathname(): "/" | "/category" | "/category/" | `/category/${string}` & {} | `/category/${string}/` & {} | "/dashboard" | "/dashboard/" | "/library" | "/library/" | "/login" | "/login/" | "/playlist" | "/playlist/" | `/playlist/${string}` & {} | `/playlist/${string}/` & {} | "/public" | "/public/" | "/settings" | "/settings/" | "/signup" | "/signup/";
 		ResolvedPathname(): `${"" | `/${string}`}${ReturnType<AppTypes['Pathname']>}`;
 		Asset(): string & {};
 	}

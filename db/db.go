@@ -2,6 +2,7 @@ package db
 
 import (
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/google/uuid"
@@ -69,6 +70,7 @@ type Track struct {
 	SpotifyID    string
 	YouTubeID    string
 	AppleMusicID string
+	PreviewURL   string // URL to 30s preview (from Spotify)
 	CreatedAt    time.Time
 }
 
@@ -95,9 +97,32 @@ type SyncJob struct {
 }
 
 // ConnectDatabase initializes the database connection
+// ConnectDatabase initializes the database connection
 func ConnectDatabase() error {
-	// UPDATE THIS STRING WITH YOUR REAL CREDENTIALS
-	dsn := "host=localhost user=postgres password=password dbname=testing port=5432 sslmode=disable"
+	dsn := os.Getenv("DATABASE_URL")
+	if dsn == "" {
+		// Fallback to building from individual vars
+		host := os.Getenv("DB_HOST")
+		user := os.Getenv("DB_USER")
+		password := os.Getenv("DB_PASSWORD")
+		dbname := os.Getenv("DB_NAME")
+		port := os.Getenv("DB_PORT")
+		sslmode := os.Getenv("DB_SSLMODE")
+
+		if host == "" || user == "" {
+			return fmt.Errorf("DATABASE_URL or DB_HOST/DB_USER not set")
+		}
+		if port == "" {
+			port = "5432"
+		}
+		if sslmode == "" {
+			sslmode = "require"
+		}
+
+		dsn = fmt.Sprintf("host=%s user=%s password=%s dbname=%s port=%s sslmode=%s",
+			host, user, password, dbname, port, sslmode)
+	}
+
 	var err error
 	DB, err = gorm.Open(postgres.Open(dsn), &gorm.Config{})
 	if err != nil {

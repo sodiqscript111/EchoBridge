@@ -53,6 +53,10 @@ func (wp *WorkerPool) worker() {
 			wp.handleSyncJob(job)
 		} else if job.Type == "categorize" {
 			wp.handleCategorizeJob(job)
+		} else if job.Type == "import_all" {
+			wp.handleImportAllJob(job)
+		} else if job.Type == "import_playlist" {
+			wp.handleImportPlaylistJob(job)
 		}
 	}
 }
@@ -100,11 +104,79 @@ func (wp *WorkerPool) handleSyncJob(job Job) {
 
 func (wp *WorkerPool) handleCategorizeJob(job Job) {
 	log.Printf("Categorizing playlist %s...", job.PlaylistID)
+
+	// Rate limiting: Free tier Gemini API allows 15 requests/minute
+	// That's 1 request every 4 seconds. Let's add a 5-second delay to be safe.
+	time.Sleep(5 * time.Second)
+
 	err := services.CategorizePlaylist(context.Background(), job.PlaylistID)
 	if err != nil {
 		log.Printf("Categorization failed: %v", err)
 	} else {
 		log.Printf("Categorization completed for playlist %s", job.PlaylistID)
+	}
+}
+
+func (wp *WorkerPool) handleImportAllJob(job Job) {
+	log.Printf("Starting Import All for user %s, platforms: %v", job.UserID, job.Platforms)
+
+	var user db.User
+	if err := db.DB.Where("id = ?", job.UserID).First(&user).Error; err != nil {
+		log.Printf("Failed to fetch user for import job: %v", err)
+		return
+	}
+
+	for _, platform := range job.Platforms {
+		if platform == "spotify" {
+			if err := services.ImportAllSpotifyPlaylists(context.Background(), user); err != nil {
+				log.Printf("Failed to import Spotify playlists: %v", err)
+			} else {
+				log.Printf("Successfully imported Spotify playlists for user %s", user.Username)
+			}
+		} else if platform == "youtube" {
+			if err := services.ImportAllYouTubePlaylists(context.Background(), user); err != nil {
+				log.Printf("Failed to import YouTube playlists: %v", err)
+			} else {
+				log.Printf("Successfully imported YouTube playlists for user %s", user.Username)
+			}
+		}
+	}
+}
+
+func (wp *WorkerPool) handleImportPlaylistJob(job Job) {
+	if len(job.Platforms) < 2 {
+		log.Printf("Invalid job data for import_playlist")
+		return
+	}
+	platform := job.Platforms[0]
+	sourceID := job.Platforms[1]
+
+	log.Printf("Importing playlist %s from %s for user %s", sourceID, platform, job.UserID)
+
+	var user db.User
+	if err := db.DB.Where("id = ?", job.UserID).First(&user).Error; err != nil {
+		log.Printf("Failed to fetch user: %v", err)
+		return
+	}
+
+	if platform == "spotify" {
+		client, err := services.GetSpotifyClient(context.Background(), user)
+		if err != nil {
+			log.Printf("Failed to get Spotify client: %v", err)
+			return
+		}
+		if err := services.ImportSpotifyPlaylist(context.Background(), client, user, sourceID); err != nil {
+			log.Printf("Failed to import Spotify playlist: %v", err)
+		}
+	} else if platform == "youtube" {
+		client, err := services.GetYouTubeClient(context.Background(), user)
+		if err != nil {
+			log.Printf("Failed to get YouTube client: %v", err)
+			return
+		}
+		if err := services.ImportYouTubePlaylist(context.Background(), client, user, sourceID); err != nil {
+			log.Printf("Failed to import YouTube playlist: %v", err)
+		}
 	}
 }
 

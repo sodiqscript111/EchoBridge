@@ -55,9 +55,7 @@
 
 <div class="p-8 pt-24 max-w-7xl mx-auto pb-24">
   <div class="mb-16 text-center">
-    <h1
-      class="text-6xl font-black mb-6 tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-white to-white/50"
-    >
+    <h1 class="text-6xl font-black mb-6 tracking-tight text-white">
       Public Mixes
     </h1>
     <p
@@ -88,9 +86,7 @@
             <h2 class="text-3xl font-bold tracking-tight text-white">
               {category}
             </h2>
-            <div
-              class="h-px flex-1 bg-gradient-to-r from-white/10 to-transparent"
-            ></div>
+            <div class="h-px flex-1 bg-white/10"></div>
           </div>
 
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">

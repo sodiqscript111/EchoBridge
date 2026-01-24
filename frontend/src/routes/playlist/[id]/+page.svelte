@@ -1,227 +1,429 @@
 <script>
-    import { page } from "$app/stores";
     import { onMount } from "svelte";
+    import { page } from "$app/stores";
     import { api } from "$lib/api";
+    import { auth } from "$lib/stores/auth";
     import {
         Play,
         Clock,
-        Music,
-        Share2,
-        Heart,
-        MoreVertical,
+        Music2,
+        Calendar,
+        Import,
+        X,
+        LogIn,
+        Globe,
+        Lock,
     } from "lucide-svelte";
+
+    let activeEmbedId = null;
+
+    function toggleEmbed(track) {
+        if (activeEmbedId === track.id) {
+            activeEmbedId = null;
+        } else {
+            activeEmbedId = track.id;
+        }
+    }
 
     let playlist = null;
     let loading = true;
     let error = null;
-    const playlistId = $page.params.id;
+    let showImportModal = false;
+    let importLoading = false;
+    let importError = null;
+    let importSuccess = null;
+    let showConnectPrompt = null; // { platform: 'spotify' | 'youtube' }
+    let showLoginPrompt = false;
+    let isPublic = false;
 
     onMount(async () => {
+        console.log("Playlist page mounted");
+        const id = $page.params.id;
+        console.log("Playlist ID:", id);
         try {
-            playlist = await api.get(`/playlists/${playlistId}`);
+            console.log("Fetching playlist...");
+            playlist = await api.getPlaylist(id);
+            isPublic = playlist.is_public;
+            console.log("Playlist fetched:", playlist);
         } catch (e) {
-            error = e.message;
+            console.error("Failed to load playlist", e);
+            error = "Failed to load playlist.";
         } finally {
             loading = false;
+            console.log("Loading set to false");
         }
     });
+
+    async function handleToggle() {
+        if (!$auth.token) {
+            showLoginPrompt = true;
+            return;
+        }
+
+        const newStatus = !isPublic;
+        try {
+            await api.patch(
+                `/api/playlists/${playlist.id}/public`,
+                { is_public: newStatus },
+                $auth.token,
+            );
+            isPublic = newStatus;
+            playlist.is_public = newStatus;
+        } catch (e) {
+            console.error("Failed to toggle playlist visibility", e);
+            alert("Failed to update playlist visibility");
+        }
+    }
+
+    async function handleImport(platform) {
+        importLoading = true;
+        importError = null;
+        importSuccess = null;
+        showConnectPrompt = null;
+
+        try {
+            await api.importPlaylist(playlist.id, platform);
+            importSuccess = `Successfully imported to ${platform}!`;
+            setTimeout(() => {
+                showImportModal = false;
+                importSuccess = null;
+            }, 2000);
+        } catch (e) {
+            console.error("Import failed", e);
+            if (e.code === "PLATFORM_NOT_CONNECTED") {
+                showConnectPrompt = { platform };
+            } else {
+                importError =
+                    e.message ||
+                    "Import failed. Please check your connection settings.";
+            }
+        } finally {
+            importLoading = false;
+        }
+    }
+
+    function connectPlatform(platform) {
+        if (platform === "spotify") {
+            window.location.href = api.getSpotifyLink();
+        } else if (platform === "youtube") {
+            window.location.href = api.getYouTubeLink();
+        }
+    }
 </script>
 
-<div class="min-h-screen pb-20">
+<div class="space-y-8 pb-20 relative">
     {#if loading}
-        <div class="flex items-center justify-center h-[80vh]">
-            <div
-                class="w-12 h-12 border-4 border-white/20 border-t-apple-blue rounded-full animate-spin"
-            ></div>
-        </div>
+        <div class="text-zinc-500">Loading playlist...</div>
     {:else if error}
-        <div class="flex items-center justify-center h-[80vh]">
-            <div class="text-center">
-                <h2 class="text-2xl font-bold text-red-400 mb-2">Error</h2>
-                <p class="text-white/60">{error}</p>
-                <a
-                    href="/public"
-                    class="inline-block mt-6 px-6 py-2 bg-white/10 rounded-full hover:bg-white/20 transition-colors"
-                >
-                    Back to Public Playlists
-                </a>
-            </div>
-        </div>
+        <div class="text-red-500">{error}</div>
     {:else if playlist}
         <!-- Header -->
-        <div class="relative h-[45vh] w-full overflow-hidden">
+        <div
+            class="flex flex-col md:flex-row gap-8 items-center md:items-end text-center md:text-left"
+        >
             <div
-                class="absolute inset-0 bg-gradient-to-b from-transparent via-black/50 to-black z-0"
-            ></div>
-            {#if playlist.cover_image}
-                <img
-                    src={playlist.cover_image}
-                    alt={playlist.title}
-                    class="absolute inset-0 w-full h-full object-cover opacity-40 blur-2xl scale-110"
-                />
-            {/if}
-
-            <div
-                class="relative z-10 h-full max-w-7xl mx-auto px-8 flex items-end pb-8"
+                class="w-52 h-52 shadow-2xl rounded-md overflow-hidden bg-zinc-800 flex-shrink-0 mx-auto md:mx-0"
             >
-                <div class="flex items-end gap-6">
-                    <div
-                        class="w-56 h-56 rounded-2xl shadow-2xl overflow-hidden bg-gradient-to-br from-white/10 to-white/5 border border-white/10 flex-shrink-0 backdrop-blur-sm"
-                    >
-                        {#if playlist.cover_image}
-                            <img
-                                src={playlist.cover_image}
-                                alt={playlist.title}
-                                class="w-full h-full object-cover"
-                            />
-                        {:else}
-                            <div
-                                class="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-800 to-black"
-                            >
-                                <Music size={64} class="text-white/20" />
-                            </div>
-                        {/if}
-                    </div>
-
-                    <div class="mb-2 flex-1">
-                        <div class="flex items-center gap-3 mb-2">
-                            <span
-                                class="text-xs font-bold text-apple-blue uppercase tracking-widest"
-                            >
-                                {playlist.platform} Playlist
-                            </span>
-                            {#if playlist.category}
-                                <span
-                                    class="px-2 py-0.5 text-[10px] font-bold bg-white/10 rounded-full text-white/80 uppercase tracking-wider border border-white/10"
-                                >
-                                    {playlist.category}
-                                </span>
-                            {/if}
-                        </div>
-                        <h1
-                            class="text-5xl font-black mt-2 mb-3 tracking-tight drop-shadow-lg"
-                        >
-                            {playlist.title}
-                        </h1>
-                        <p
-                            class="text-lg text-white/70 mb-4 max-w-2xl line-clamp-2 font-medium"
-                        >
-                            {playlist.description ||
-                                "No description available."}
-                        </p>
-
-                        <div class="flex items-center gap-3 mt-6">
-                            <button
-                                class="px-6 py-3 bg-apple-blue hover:bg-blue-500 text-white rounded-full font-bold flex items-center gap-2 transition-all transform hover:scale-105 shadow-xl shadow-blue-500/30"
-                            >
-                                <Play size={18} fill="currentColor" />
-                                Play All
-                            </button>
-                            <button
-                                class="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all backdrop-blur-md border border-white/10"
-                            >
-                                <Heart size={20} />
-                            </button>
-                            <button
-                                class="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all backdrop-blur-md border border-white/10"
-                            >
-                                <Share2 size={20} />
-                            </button>
-                            <button
-                                class="p-3 bg-white/10 hover:bg-white/20 rounded-full transition-all backdrop-blur-md border border-white/10"
-                            >
-                                <MoreVertical size={20} />
-                            </button>
-                        </div>
-                    </div>
+                <img
+                    src={playlist.cover_image ||
+                        "https://images.unsplash.com/photo-1614680376593-902f74cf0d41?w=800&auto=format&fit=crop&q=60"}
+                    alt={playlist.title}
+                    class="w-full h-full object-cover"
+                />
+            </div>
+            <div class="flex-1 space-y-4">
+                <span
+                    class="text-xs font-bold uppercase tracking-wider text-zinc-400"
+                    >Playlist</span
+                >
+                <h1
+                    class="text-3xl md:text-5xl font-bold text-white tracking-tighter"
+                >
+                    {playlist.title}
+                </h1>
+                <!-- Description removed as requested -->
+                <div
+                    class="flex items-center justify-center md:justify-start gap-2 text-sm text-zinc-400 font-medium"
+                >
+                    <Music2 class="w-4 h-4" />
+                    <span>{playlist.tracks.length} songs</span>
                 </div>
             </div>
         </div>
 
-        <!-- Tracks List -->
-        <div class="max-w-7xl mx-auto px-8 mt-6">
-            <div class="mb-4 flex items-center justify-between">
-                <h2 class="text-2xl font-bold">Tracks</h2>
-                <span class="text-sm text-white/50"
-                    >{playlist.tracks?.length || 0} songs</span
+        <!-- Actions -->
+        <div
+            class="flex items-center justify-center md:justify-start gap-4 py-6"
+        >
+            <button
+                on:click={() => {
+                    if (!$auth.token) {
+                        showLoginPrompt = true;
+                    } else {
+                        showImportModal = true;
+                    }
+                }}
+                class="px-6 py-3 rounded-full border border-white/20 hover:border-white text-white font-semibold text-sm transition-colors flex items-center gap-2"
+            >
+                <Import class="w-4 h-4" />
+                Import to...
+            </button>
+
+            {#if $auth.user && playlist.owner_id === $auth.user.id}
+                <button
+                    on:click={handleToggle}
+                    class="w-12 h-12 rounded-full border border-white/20 hover:border-white flex items-center justify-center text-white transition-colors"
+                    title={isPublic ? "Public" : "Private"}
                 >
+                    {#if isPublic}
+                        <Globe class="w-5 h-5" />
+                    {:else}
+                        <Lock class="w-5 h-5" />
+                    {/if}
+                </button>
+            {/if}
+        </div>
+
+        <!-- Track List -->
+        <div class="w-full">
+            <!-- Header Row -->
+            <div
+                class="grid grid-cols-[1fr_1fr_40px] gap-4 px-4 py-2 border-b border-white/5 text-sm font-medium text-zinc-400 uppercase tracking-wider mb-2"
+            >
+                <span>Title</span>
+                <span class="hidden md:block">Album</span>
+                <span class="hidden md:block"><Clock class="w-4 h-4" /></span>
             </div>
 
-            <div
-                class="glass rounded-3xl overflow-hidden border border-white/5"
-            >
-                <table class="w-full text-left">
-                    <thead class="bg-white/5 border-b border-white/10">
-                        <tr>
-                            <th
-                                class="px-6 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider w-16"
-                                >#</th
+            <!-- Tracks -->
+            <div class="space-y-1">
+                {#each playlist.tracks as track, i}
+                    {#if activeEmbedId === track.id && track.spotify_id}
+                        <div class="px-4 py-2 bg-white/5 rounded-md">
+                            <iframe
+                                src="https://open.spotify.com/embed/track/{track.spotify_id}?utm_source=generator&theme=0"
+                                width="100%"
+                                height="80"
+                                frameBorder="0"
+                                allowfullscreen=""
+                                allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"
+                                loading="lazy"
+                                title="Spotify Embed"
+                                class="rounded-md shadow-lg"
+                            ></iframe>
+                            <button
+                                on:click={() => (activeEmbedId = null)}
+                                class="text-xs text-zinc-500 hover:text-white mt-2 underline w-full text-center"
                             >
-                            <th
-                                class="px-6 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider"
-                                >Title</th
-                            >
-                            <th
-                                class="px-6 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider"
-                                >Album</th
-                            >
-                            <th
-                                class="px-6 py-3 text-xs font-semibold text-white/40 uppercase tracking-wider text-right"
-                            >
-                                <Clock size={14} class="inline" />
-                            </th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-white/5">
-                        {#each playlist.tracks as track, i}
-                            <tr
-                                class="group hover:bg-white/5 transition-all duration-200"
-                            >
-                                <td
-                                    class="px-6 py-4 text-sm text-white/30 group-hover:text-apple-blue transition-colors font-medium"
+                                Close Player
+                            </button>
+                        </div>
+                    {:else}
+                        <div
+                            class="group grid grid-cols-[1fr_1fr_40px] gap-4 px-4 py-3 rounded-md hover:bg-white/5 transition-colors items-center text-sm text-zinc-400"
+                        >
+                            <div class="flex flex-col relative pl-8">
+                                <div
+                                    class="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-4 flex items-center justify-center"
                                 >
-                                    <span class="group-hover:hidden"
-                                        >{i + 1}</span
-                                    >
-                                    <Play
-                                        size={14}
-                                        class="hidden group-hover:inline"
-                                        fill="currentColor"
-                                    />
-                                </td>
-                                <td class="px-6 py-4">
-                                    <div
-                                        class="font-semibold text-white group-hover:text-apple-blue transition-colors"
-                                    >
-                                        {track.title}
-                                    </div>
-                                    <div class="text-sm text-white/50 mt-0.5">
-                                        {track.artist}
-                                    </div>
-                                </td>
-                                <td
-                                    class="px-6 py-4 text-sm text-white/50 font-medium"
+                                    {#if track.spotify_id}
+                                        <button
+                                            on:click={() => toggleEmbed(track)}
+                                            class="text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                        >
+                                            <Play
+                                                class="w-4 h-4 fill-current"
+                                            />
+                                        </button>
+                                    {/if}
+                                </div>
+                                <span class="text-white font-medium truncate"
+                                    >{track.title}</span
                                 >
-                                    {track.album || "—"}
-                                </td>
-                                <td
-                                    class="px-6 py-4 text-sm text-white/30 text-right font-mono"
+                                <span
+                                    class="group-hover:text-white transition-colors"
+                                    >{track.artist}</span
                                 >
-                                    3:45
-                                </td>
-                            </tr>
-                        {/each}
-                    </tbody>
-                </table>
+                            </div>
+                            <span
+                                class="hidden md:block truncate group-hover:text-white transition-colors"
+                                >{track.album}</span
+                            >
+                            <span class="hidden md:block font-mono text-xs"
+                                >3:45</span
+                            >
+                        </div>
+                    {/if}
+                {/each}
+            </div>
+        </div>
+    {/if}
 
-                {#if playlist.tracks?.length === 0}
-                    <div class="p-16 text-center">
-                        <Music size={48} class="mx-auto text-white/10 mb-4" />
-                        <p class="text-white/40 text-lg">
-                            No tracks found in this playlist.
+    <!-- Import Modal -->
+    {#if showImportModal}
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        >
+            <div
+                class="bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-6 relative"
+            >
+                <button
+                    on:click={() => {
+                        showImportModal = false;
+                        showConnectPrompt = null;
+                    }}
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-white"
+                >
+                    <X class="w-5 h-5" />
+                </button>
+
+                {#if showConnectPrompt}
+                    <div class="text-center space-y-4">
+                        <div
+                            class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto text-zinc-400"
+                        >
+                            <Import class="w-6 h-6" />
+                        </div>
+                        <div>
+                            <h2 class="text-xl font-bold text-white">
+                                Connect {showConnectPrompt.platform ===
+                                "spotify"
+                                    ? "Spotify"
+                                    : "YouTube"}?
+                            </h2>
+                            <p class="text-zinc-400 text-sm mt-2">
+                                You need to connect your account to import
+                                playlists.
+                            </p>
+                        </div>
+
+                        <div class="flex gap-3 pt-2">
+                            <button
+                                on:click={() => {
+                                    showConnectPrompt = null;
+                                }}
+                                class="flex-1 py-2 rounded-md bg-white/5 hover:bg-white/10 text-white font-medium text-sm transition-colors"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                on:click={() =>
+                                    connectPlatform(showConnectPrompt.platform)}
+                                class="flex-1 py-2 rounded-md bg-white hover:bg-zinc-200 text-black font-bold text-sm transition-colors shadow-lg shadow-white/20"
+                            >
+                                Connect Now
+                            </button>
+                        </div>
+                    </div>
+                {:else}
+                    <div class="text-center">
+                        <h2 class="text-xl font-bold text-white mb-2">
+                            Import Playlist
+                        </h2>
+                        <p class="text-zinc-400 text-sm">
+                            Choose a platform to add this playlist to your
+                            library.
                         </p>
                     </div>
+
+                    {#if importError}
+                        <div
+                            class="bg-red-500/10 text-red-400 p-3 rounded-md text-sm text-center"
+                        >
+                            {importError}
+                        </div>
+                    {/if}
+
+                    {#if importSuccess}
+                        <div
+                            class="bg-green-500/10 text-green-400 p-3 rounded-md text-sm text-center"
+                        >
+                            {importSuccess}
+                        </div>
+                    {/if}
+
+                    <div class="grid grid-cols-2 gap-4">
+                        <button
+                            on:click={() => handleImport("spotify")}
+                            disabled={importLoading}
+                            class="flex flex-col items-center justify-center gap-3 p-4 rounded-lg bg-[#1DB954]/10 border border-[#1DB954]/20 hover:bg-[#1DB954]/20 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <div
+                                class="w-10 h-10 rounded-full bg-[#1DB954] text-black flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform"
+                            >
+                                <Music2 class="w-5 h-5" />
+                            </div>
+                            <span class="text-white font-medium text-sm"
+                                >Spotify</span
+                            >
+                        </button>
+
+                        <button
+                            on:click={() => handleImport("youtube")}
+                            disabled={importLoading}
+                            class="flex flex-col items-center justify-center gap-3 p-4 rounded-lg bg-[#FF0000]/10 border border-[#FF0000]/20 hover:bg-[#FF0000]/20 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            <div
+                                class="w-10 h-10 rounded-full bg-[#FF0000] text-white flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform"
+                            >
+                                <Play class="w-5 h-5 fill-current" />
+                            </div>
+                            <span class="text-white font-medium text-sm"
+                                >YouTube</span
+                            >
+                        </button>
+                    </div>
                 {/if}
+            </div>
+        </div>
+    {/if}
+
+    <!-- Login Prompt Modal -->
+    {#if showLoginPrompt}
+        <div
+            class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+        >
+            <div
+                class="bg-zinc-900 border border-white/10 rounded-xl p-6 max-w-md w-full shadow-2xl space-y-6 relative"
+            >
+                <button
+                    on:click={() => (showLoginPrompt = false)}
+                    class="absolute top-4 right-4 text-zinc-400 hover:text-white"
+                >
+                    <X class="w-5 h-5" />
+                </button>
+
+                <div class="text-center space-y-4">
+                    <div
+                        class="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto text-zinc-400"
+                    >
+                        <LogIn class="w-6 h-6" />
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-bold text-white">
+                            Login Required
+                        </h2>
+                        <p class="text-zinc-400 text-sm mt-2">
+                            You need to be logged in to import playlists to your
+                            library.
+                        </p>
+                    </div>
+
+                    <div class="flex gap-3 pt-2">
+                        <button
+                            on:click={() => (showLoginPrompt = false)}
+                            class="flex-1 py-2 rounded-md bg-white/5 hover:bg-white/10 text-white font-medium text-sm transition-colors"
+                        >
+                            Cancel
+                        </button>
+                        <a
+                            href="/login"
+                            class="flex-1 py-2 rounded-md bg-white hover:bg-zinc-200 text-black font-bold text-sm transition-colors shadow-lg shadow-white/20 flex items-center justify-center"
+                        >
+                            Log In
+                        </a>
+                    </div>
+                </div>
             </div>
         </div>
     {/if}

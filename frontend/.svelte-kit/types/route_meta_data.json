@@ -1,8 +1,15 @@
 {
 	"/": [],
-	"/dashboard": [],
+	"/category/[name]": [
+		"src/routes/category/[name]/+page.js"
+	],
+	"/dashboard": [
+		"src/routes/dashboard/+page.js"
+	],
+	"/library": [],
 	"/login": [],
 	"/playlist/[id]": [],
 	"/public": [],
+	"/settings": [],
 	"/signup": []
 }

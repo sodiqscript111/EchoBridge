@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
 	"EchoBridge/db"
+	"EchoBridge/internal/worker"
 
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -24,7 +26,7 @@ import (
 )
 
 // CONFIGURATION
-const FrontendURL = "http://localhost:5173"
+var FrontendURL = "http://localhost:5173"
 
 // GLOBAL VARIABLES (Initialized in init())
 var (
@@ -33,21 +35,35 @@ var (
 	spotifyAuth        *spotifyauth.Authenticator
 	youtubeOAuthConfig *oauth2.Config
 	state              = "random-state-string"
+	WorkerPool         *worker.WorkerPool
 )
 
 // Initialize Credentials Here
 func init() {
+	if url := os.Getenv("FRONTEND_URL"); url != "" {
+		FrontendURL = url
+	}
+
 	// --- SPOTIFY CREDENTIALS ---
-	spotifyClientID := "6f55af09467d44319c84abf777042886"
-	spotifyClientSecret := "879b791b755c4a9cbb97254bee4d3917"
-	spotifyRedirectURL := "http://127.0.0.1:8000/callback/spotify"
+	spotifyClientID := os.Getenv("SPOTIFY_CLIENT_ID")
+	spotifyClientSecret := os.Getenv("SPOTIFY_CLIENT_SECRET")
+	spotifyRedirectURL := os.Getenv("SPOTIFY_REDIRECT_URL")
+	if spotifyRedirectURL == "" {
+		spotifyRedirectURL = "http://127.0.0.1:8000/callback/spotify"
+	}
 
 	// --- GOOGLE / YOUTUBE CREDENTIALS ---
-	youtubeClientID := "1055231814715-mkfdshbi2l4rkmvn39l4f530o61o6c4u.apps.googleusercontent.com"
-	youtubeClientSecret := "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"
+	youtubeClientID := os.Getenv("YOUTUBE_CLIENT_ID")
+	youtubeClientSecret := os.Getenv("YOUTUBE_CLIENT_SECRET")
 
-	googleRedirectURL := "http://127.0.0.1:8000/callback/google"
-	youtubeRedirectURL := "http://127.0.0.1:8000/callback/youtube"
+	googleRedirectURL := os.Getenv("GOOGLE_REDIRECT_URL")
+	if googleRedirectURL == "" {
+		googleRedirectURL = "http://127.0.0.1:8000/callback/google"
+	}
+	youtubeRedirectURL := os.Getenv("YOUTUBE_REDIRECT_URL")
+	if youtubeRedirectURL == "" {
+		youtubeRedirectURL = "http://127.0.0.1:8000/callback/youtube"
+	}
 
 	// 1. Setup Spotify
 	spotifyAuth = spotifyauth.New(
@@ -88,14 +104,23 @@ func init() {
 
 func AuthMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		fmt.Printf("[AuthMiddleware] Request: %s %s\n", c.Request.Method, c.Request.URL.Path)
 		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" || !strings.HasPrefix(authHeader, "Bearer ") {
+		var tokenString string
+
+		if authHeader != "" && strings.HasPrefix(authHeader, "Bearer ") {
+			tokenString = strings.TrimPrefix(authHeader, "Bearer ")
+		} else {
+			// Fallback to query parameter "token"
+			tokenString = c.Query("token")
+		}
+
+		if tokenString == "" {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Missing or invalid Authorization header"})
 			c.Abort()
 			return
 		}
 
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
 		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
 			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
 				return nil, fmt.Errorf("unexpected signing method")
@@ -289,7 +314,7 @@ func SpotifyLink(c *gin.Context) {
 	}
 	// Use UserID as state to identify user in callback
 	url := spotifyAuth.AuthURL(userID.String())
-	c.JSON(http.StatusOK, gin.H{"url": url})
+	c.Redirect(http.StatusFound, url)
 }
 
 // SpotifyCallback handles Spotify OAuth callback
@@ -321,14 +346,11 @@ func SpotifyCallback(c *gin.Context) {
 	if err := updateUserService(c.Request.Context(), userID, "spotify", user.ID, user.Email, user.DisplayName, token); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to link Spotify", "details": err.Error()})
 		return
+		return
 	}
 
-	// Return JSON instead of Redirect
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "Spotify account linked successfully!",
-		"platform": "spotify",
-		"status":   "linked",
-	})
+	// Redirect to settings with success parameter
+	c.Redirect(http.StatusFound, FrontendURL+"/settings?connected=spotify")
 }
 
 // YouTubeLink initiates YouTube OAuth flow
@@ -341,7 +363,7 @@ func YouTubeLink(c *gin.Context) {
 	// Use UserID as state
 	// Use AccessTypeOffline to ensure Refresh Token
 	url := youtubeOAuthConfig.AuthCodeURL(userID.String(), oauth2.AccessTypeOffline, oauth2.ApprovalForce)
-	c.JSON(http.StatusOK, gin.H{"url": url})
+	c.Redirect(http.StatusFound, url)
 }
 
 // YouTubeCallback handles YouTube OAuth callback
@@ -387,14 +409,11 @@ func YouTubeCallback(c *gin.Context) {
 	if err := updateUserService(c.Request.Context(), userID, "youtube", channel.Id, "", channel.Snippet.Title, token); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to link YouTube", "details": err.Error()})
 		return
+		return
 	}
 
-	// Return JSON instead of Redirect
-	c.JSON(http.StatusOK, gin.H{
-		"message":  "YouTube account linked successfully!",
-		"platform": "youtube",
-		"status":   "linked",
-	})
+	// Redirect to settings with success parameter
+	c.Redirect(http.StatusFound, FrontendURL+"/settings?connected=youtube")
 }
 
 // --- HELPER FUNCTIONS ---

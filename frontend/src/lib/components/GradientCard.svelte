@@ -25,14 +25,14 @@
     ></div>
   {:else}
     <div
-      class="absolute inset-0 w-full h-full bg-gradient-to-br from-[var(--c1)] to-[var(--c2)]"
+      class="absolute inset-0 w-full h-full bg-zinc-800"
       style="--c1: {color1}; --c2: {color2};"
     ></div>
   {/if}
 
   <!-- Content Overlay (Glass) -->
   <div
-    class="absolute inset-0 p-6 flex flex-col justify-between bg-gradient-to-t from-black/90 via-black/20 to-transparent"
+    class="absolute inset-0 p-6 flex flex-col justify-between bg-black/40"
   >
     <!-- Top: Icon -->
     <div class="flex justify-between items-start">

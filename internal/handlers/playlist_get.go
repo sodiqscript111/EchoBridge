@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 
 	"EchoBridge/db"
@@ -11,7 +12,9 @@ import (
 
 // GetPlaylist retrieves a single playlist by ID with tracks
 func GetPlaylist(c *gin.Context) {
-	playlistID, err := uuid.Parse(c.Param("id"))
+	idParam := c.Param("id")
+	fmt.Printf("GetPlaylist called with ID: %s\n", idParam)
+	playlistID, err := uuid.Parse(idParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid playlist ID"})
 		return
@@ -46,6 +49,7 @@ func GetPlaylist(c *gin.Context) {
 			"spotify_id":    t.SpotifyID,
 			"youtube_id":    t.YouTubeID,
 			"applemusic_id": t.AppleMusicID,
+			"preview_url":   t.PreviewURL,
 		})
 	}
 

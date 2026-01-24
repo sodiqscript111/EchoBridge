@@ -1,28 +1,28 @@
 <script>
-  import { goto } from '$app/navigation';
-  import { api } from '$lib/api';
-  import { auth } from '$lib/stores/auth';
-  import { LogIn } from 'lucide-svelte';
+  import { goto } from "$app/navigation";
+  import { api } from "$lib/api";
+  import { auth } from "$lib/stores/auth";
+  import { LogIn } from "lucide-svelte";
 
-  let email = '';
-  let username = '';
-  let password = '';
+  let email = "";
+  let username = "";
+  let password = "";
   let loading = false;
-  let error = '';
+  let error = "";
 
   async function handleSignup() {
-    error = '';
+    error = "";
     loading = true;
 
     try {
-      const response = await api.post('/register', {
+      const response = await api.post("/register", {
         email,
         username,
         password,
       });
 
-      auth.login(response.token, response.user);
-      goto('/dashboard');
+      auth.login(response.jwt_token, response.user);
+      goto("/dashboard");
     } catch (e) {
       error = e.message;
     } finally {
@@ -40,14 +40,18 @@
       </div>
 
       {#if error}
-        <div class="bg-red-500/10 border border-red-500/50 rounded-2xl p-4 mb-6 text-red-400 text-sm">
+        <div
+          class="bg-red-500/10 border border-red-500/50 rounded-2xl p-4 mb-6 text-red-400 text-sm"
+        >
           {error}
         </div>
       {/if}
 
       <form on:submit|preventDefault={handleSignup} class="space-y-4">
         <div>
-          <label class="block text-sm font-medium mb-2 text-white/70">Username</label>
+          <label class="block text-sm font-medium mb-2 text-white/70"
+            >Username</label
+          >
           <input
             type="text"
             bind:value={username}
@@ -58,7 +62,9 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-2 text-white/70">Email</label>
+          <label class="block text-sm font-medium mb-2 text-white/70"
+            >Email</label
+          >
           <input
             type="email"
             bind:value={email}
@@ -69,7 +75,9 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium mb-2 text-white/70">Password</label>
+          <label class="block text-sm font-medium mb-2 text-white/70"
+            >Password</label
+          >
           <input
             type="password"
             bind:value={password}
@@ -87,7 +95,9 @@
           class="w-full py-3 bg-apple-blue rounded-xl font-bold hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
         >
           {#if loading}
-            <div class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <div
+              class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"
+            ></div>
             Creating Account...
           {:else}
             <LogIn size={20} />
@@ -98,7 +108,9 @@
 
       <div class="mt-6 text-center text-sm text-white/60">
         Already have an account?
-        <a href="/login" class="text-apple-blue hover:underline font-medium">Log in</a>
+        <a href="/login" class="text-apple-blue hover:underline font-medium"
+          >Log in</a
+        >
       </div>
     </div>
   </div>

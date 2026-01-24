@@ -26,6 +26,7 @@
  * ```
  */
 declare module '$env/static/private' {
+	export const VITE_API_BASE_URL: string;
 	export const ALLUSERSPROFILE: string;
 	export const ANTIGRAVITY_CLI_ALIAS: string;
 	export const APPDATA: string;
@@ -41,11 +42,11 @@ declare module '$env/static/private' {
 	export const DataGrip: string;
 	export const DriverData: string;
 	export const EDITOR: string;
-	export const EFC_9052_1262719628: string;
-	export const EFC_9052_1592913036: string;
-	export const EFC_9052_2283032206: string;
-	export const EFC_9052_2775293581: string;
-	export const EFC_9052_3789132940: string;
+	export const EFC_3932_1262719628: string;
+	export const EFC_3932_1592913036: string;
+	export const EFC_3932_2283032206: string;
+	export const EFC_3932_2775293581: string;
+	export const EFC_3932_3789132940: string;
 	export const FPS_BROWSER_APP_PROFILE_STRING: string;
 	export const FPS_BROWSER_USER_PROFILE_STRING: string;
 	export const GIT_ASKPASS: string;
@@ -143,6 +144,7 @@ declare module '$env/static/public' {
  */
 declare module '$env/dynamic/private' {
 	export const env: {
+		VITE_API_BASE_URL: string;
 		ALLUSERSPROFILE: string;
 		ANTIGRAVITY_CLI_ALIAS: string;
 		APPDATA: string;
@@ -158,11 +160,11 @@ declare module '$env/dynamic/private' {
 		DataGrip: string;
 		DriverData: string;
 		EDITOR: string;
-		EFC_9052_1262719628: string;
-		EFC_9052_1592913036: string;
-		EFC_9052_2283032206: string;
-		EFC_9052_2775293581: string;
-		EFC_9052_3789132940: string;
+		EFC_3932_1262719628: string;
+		EFC_3932_1592913036: string;
+		EFC_3932_2283032206: string;
+		EFC_3932_2775293581: string;
+		EFC_3932_3789132940: string;
 		FPS_BROWSER_APP_PROFILE_STRING: string;
 		FPS_BROWSER_USER_PROFILE_STRING: string;
 		GIT_ASKPASS: string;
