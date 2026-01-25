@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"strings"
@@ -8,11 +9,13 @@ import (
 
 	"EchoBridge/db"
 	"EchoBridge/internal/services"
+	"EchoBridge/internal/temporal"
 	"EchoBridge/internal/worker"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/zmb3/spotify/v2"
+	"go.temporal.io/sdk/client"
 )
 
 // PostPlaylist creates a new playlist AND imports tracks
@@ -280,26 +283,57 @@ func ImportPublicPlaylist(c *gin.Context) {
 		return
 	}
 
-	// Import to the chosen platform
+	// Use Temporal workflow if available for rate-limited import
+	temporalClient := temporal.GetClient()
+	if temporalClient != nil {
+		workflowOptions := client.StartWorkflowOptions{
+			ID:        "playlist-sync-" + uuid.New().String(),
+			TaskQueue: temporal.PlaylistSyncTaskQueue,
+		}
+
+		workflowInput := temporal.PlaylistSyncInput{
+			UserID:     userID,
+			PlaylistID: playlistID,
+			Platforms:  []string{input.Platform},
+			TestMode:   true, // Enable test mode for demo
+		}
+
+		we, err := temporalClient.ExecuteWorkflow(context.Background(), workflowOptions, temporal.PlaylistSyncWorkflow, workflowInput)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to start workflow", "details": err.Error()})
+			return
+		}
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"message":     fmt.Sprintf("Import to %s started via Temporal workflow", strings.Title(input.Platform)),
+			"workflow_id": we.GetID(),
+			"run_id":      we.GetRunID(),
+			"platform":    input.Platform,
+			"temporal_ui": "http://localhost:8233",
+		})
+		return
+	}
+
+	// Fallback: Import directly if Temporal is not available
 	var targetPlaylistID string
 	if input.Platform == "spotify" {
-		client, err := services.GetSpotifyClient(c.Request.Context(), dbUser)
+		spClient, err := services.GetSpotifyClient(c.Request.Context(), dbUser)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to connect to Spotify"})
 			return
 		}
-		targetPlaylistID, err = services.ImportToSpotify(c.Request.Context(), client, dbUser, playlist, tracks)
+		targetPlaylistID, err = services.ImportToSpotify(c.Request.Context(), spClient, dbUser, playlist, tracks)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to import to Spotify", "details": err.Error()})
 			return
 		}
 	} else if input.Platform == "youtube" {
-		client, err := services.GetYouTubeClient(c.Request.Context(), dbUser)
+		ytClient, err := services.GetYouTubeClient(c.Request.Context(), dbUser)
 		if err != nil {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to connect to YouTube"})
 			return
 		}
-		targetPlaylistID, err = services.ImportToYouTube(c.Request.Context(), client, playlist, tracks)
+		targetPlaylistID, err = services.ImportToYouTube(c.Request.Context(), ytClient, playlist, tracks)
 		if err != nil {
 			fmt.Printf("Error importing to YouTube: %v\n", err)
 			if strings.Contains(err.Error(), "quotaExceeded") {

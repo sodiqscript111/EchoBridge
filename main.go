@@ -8,6 +8,7 @@ import (
 	"EchoBridge/internal/auth"
 	"EchoBridge/internal/handlers"
 	"EchoBridge/internal/scheduler"
+	"EchoBridge/internal/temporal"
 	"EchoBridge/internal/worker"
 
 	"github.com/joho/godotenv"
@@ -22,6 +23,9 @@ func main() {
 		log.Println("No .env file found, relying on system environment variables")
 	}
 
+	// Initialize OAuth configurations (must be after .env is loaded)
+	auth.InitAuth()
+
 	// Initialize Worker Pool
 	syncWorker := worker.NewWorkerPool(100)
 	syncWorker.Start(5) // Start 5 workers
@@ -32,6 +36,19 @@ func main() {
 
 	if err := db.ConnectDatabase(); err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
+	}
+
+	// Initialize Temporal Client
+	if err := temporal.InitClient(); err != nil {
+		log.Printf("⚠️ Failed to connect to Temporal (running without workflows): %v", err)
+	} else {
+		defer temporal.Close()
+		// Start Temporal Worker in background
+		go func() {
+			if err := temporal.StartWorker(); err != nil {
+				log.Printf("Temporal worker stopped: %v", err)
+			}
+		}()
 	}
 
 	//  Start Scheduler

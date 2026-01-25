@@ -1,15 +1,18 @@
 package handlers
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
 	"EchoBridge/db"
+	"EchoBridge/internal/temporal"
 	"EchoBridge/internal/worker"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"go.temporal.io/sdk/client"
 )
 
 // SyncPlaylist syncs a playlist to specified platforms
@@ -27,15 +30,11 @@ func SyncPlaylist(c *gin.Context) {
 	}
 
 	var input struct {
-		Platforms []string `json:"platforms" binding:"required"`
+		Platforms   []string `json:"platforms" binding:"required"`
+		UseTemporal bool     `json:"use_temporal"` // Optional: explicitly use Temporal
 	}
 	if err := c.ShouldBindJSON(&input); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid input", "details": err.Error()})
-		return
-	}
-
-	if WorkerPool == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Worker pool not initialized"})
 		return
 	}
 
@@ -55,16 +54,66 @@ func SyncPlaylist(c *gin.Context) {
 		return
 	}
 
+	// Try to use Temporal if available
+	temporalClient := temporal.GetClient()
+	if temporalClient != nil {
+		workflowOptions := client.StartWorkflowOptions{
+			ID:        "playlist-sync-" + jobID.String(),
+			TaskQueue: temporal.PlaylistSyncTaskQueue,
+		}
+
+		workflowInput := temporal.PlaylistSyncInput{
+			UserID:     userID,
+			PlaylistID: playlistID,
+			Platforms:  input.Platforms,
+			TestMode:   true, // Enable test mode for demo
+		}
+
+		we, err := temporalClient.ExecuteWorkflow(context.Background(), workflowOptions, temporal.PlaylistSyncWorkflow, workflowInput)
+		if err != nil {
+			// Fall back to worker pool
+			fallbackToWorkerPool(c, jobID, userID, playlistID, input.Platforms)
+			return
+		}
+
+		// Update job with workflow ID
+		db.DB.Model(&syncJob).Updates(map[string]interface{}{
+			"status": "processing",
+		})
+
+		c.JSON(http.StatusAccepted, gin.H{
+			"message":     "Sync started via Temporal workflow",
+			"job_id":      jobID,
+			"workflow_id": we.GetID(),
+			"run_id":      we.GetRunID(),
+			"playlist_id": playlistID,
+			"status":      "processing",
+			"temporal_ui": "http://localhost:8233",
+		})
+		return
+	}
+
+	// Fall back to worker pool
+	fallbackToWorkerPool(c, jobID, userID, playlistID, input.Platforms)
+}
+
+func fallbackToWorkerPool(c *gin.Context, jobID, userID, playlistID uuid.UUID, platforms []string) {
+	if WorkerPool == nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "No worker available"})
+		return
+	}
+
 	job := worker.Job{
+		Type:       "sync",
 		JobID:      jobID,
 		UserID:     userID,
 		PlaylistID: playlistID,
-		Platforms:  input.Platforms,
+		Platforms:  platforms,
 	}
 	WorkerPool.Submit(job)
 
 	c.JSON(http.StatusAccepted, gin.H{
-		"message":     "Sync started in background",
+		"message":     "Sync started via worker pool (Temporal unavailable)",
 		"job_id":      jobID,
 		"playlist_id": playlistID,
 		"status":      "pending",

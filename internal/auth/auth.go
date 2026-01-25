@@ -38,8 +38,8 @@ var (
 	WorkerPool         *worker.WorkerPool
 )
 
-// Initialize Credentials Here
-func init() {
+// InitAuth initializes OAuth configurations - must be called after .env is loaded
+func InitAuth() {
 	if url := os.Getenv("FRONTEND_URL"); url != "" {
 		FrontendURL = url
 	}
